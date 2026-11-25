@@ -422,7 +422,8 @@ unsafe fn alloc_pool_heap(dev: &ID3D12Device, adapter: Option<&windows::Win32::G
     }
     if super::real::dred_on() {
         if let Some(ref h) = heap {
-            super::real::name_heap(h.as_raw(), "xcl vram tile_pool");
+            // local diagnostic (integration-12gb, not for upstream): which memory the pool is in
+            super::real::name_heap(h.as_raw(), if properties.Type == D3D12_HEAP_TYPE_CUSTOM { "xcl vram tile_pool L0 system memory" } else { "xcl vram tile_pool video memory" });
         }
     }
     heap

@@ -733,6 +733,8 @@ unsafe fn take(dev: &ID3D12Device, bytes: u64) -> Result<Job, String> {
     )
     .map_err(e)?;
     let buf = buf.ok_or("texture upload buffer")?;
+    // local diagnostic (integration-12gb, not for upstream)
+    super::real::name_resource(buf.as_raw(), &format!("xcl texture upload buf cap={cap:#x}"));
     let mut p: *mut c_void = std::ptr::null_mut();
     buf.Map(0, None, Some(&mut p)).map_err(e)?;
     Ok(Job { dev: key, alloc, list, buf, ptr: p as *mut u8, bytes: cap })

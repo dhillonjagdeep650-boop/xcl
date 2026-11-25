@@ -923,6 +923,8 @@ pub(super) unsafe extern "system" fn create_placed_resource_x(this: *mut c_void,
                         super::title_textures::retire_overlapping(va as usize, bytes as usize);
                     }
                     real::note_title_address(*ppv as usize, va as usize);
+                    // local diagnostic (integration-12gb, not for upstream)
+                    real::name_resource(*ppv, &format!("xcl title_tex target va={va:#x}"));
                 }
                 return hr;
             }
@@ -937,6 +939,12 @@ pub(super) unsafe extern "system" fn create_placed_resource_x(this: *mut c_void,
             real::dev_create_committed_resource(this, &heap as *const _ as usize, 0, d.as_ptr() as usize, state as usize, clear as usize, riid, ppv)
         }
     };
+    // local diagnostic (integration-12gb, not for upstream): a DRED page fault names the kind of title texture
+    if hr >= 0 && !(*ppv).is_null() && real::dred_on() {
+        let w = |o: usize| u32::from_le_bytes(x[o..o + 4].try_into().unwrap());
+        let kind = if placed_hr.is_some() { "pages" } else { "committed" };
+        real::name_resource(*ppv, &format!("xcl title_tex {kind} va={va:#x} {}x{} fmt={}", u64::from_le_bytes(x[0x10..0x18].try_into().unwrap()), w(0x18), w(0x20)));
+    }
     if hr >= 0 && !buffer && !(*ppv).is_null() {
         static M: AtomicU64 = AtomicU64::new(0);
         match super::title_textures::register(this, *ppv, va as usize, &x, D3D12_RESOURCE_STATES(state as i32)) {
