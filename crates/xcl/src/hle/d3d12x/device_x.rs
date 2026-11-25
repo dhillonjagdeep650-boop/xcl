@@ -943,7 +943,8 @@ pub(super) unsafe extern "system" fn create_placed_resource_x(this: *mut c_void,
     if hr >= 0 && !(*ppv).is_null() && real::dred_on() {
         let w = |o: usize| u32::from_le_bytes(x[o..o + 4].try_into().unwrap());
         let kind = if placed_hr.is_some() { "pages" } else { "committed" };
-        real::name_resource(*ppv, &format!("xcl title_tex {kind} va={va:#x} {}x{} fmt={}", u64::from_le_bytes(x[0x10..0x18].try_into().unwrap()), w(0x18), w(0x20)));
+        let origin = if real::VIEW_ORIGIN.with(|c| c.get()) { " via resource_at" } else { "" };
+        real::name_resource(*ppv, &format!("xcl title_tex {kind}{origin} va={va:#x} {}x{} fmt={}", u64::from_le_bytes(x[0x10..0x18].try_into().unwrap()), w(0x18), w(0x20)));
     }
     if hr >= 0 && !buffer && !(*ppv).is_null() {
         static M: AtomicU64 = AtomicU64::new(0);

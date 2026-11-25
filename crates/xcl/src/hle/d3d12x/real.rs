@@ -2304,16 +2304,17 @@ unsafe fn resource_at(this: *mut c_void, desc: *const u8, va: u64) -> *mut c_voi
         return r as *mut c_void;
     }
     let mut r = std::ptr::null_mut();
+    // local diagnostic (integration-12gb, not for upstream): create_placed_resource_x names the
+    // texture with its kind (pages / committed) and adds "via resource_at" while this is set
+    VIEW_ORIGIN.with(|c| c.set(true));
     let hr = super::device_x::create_placed_resource_x(this, va, x.as_ptr(), 0, std::ptr::null(), &ID3D12Resource::IID as *const _ as *const GUID, &mut r);
+    VIEW_ORIGIN.with(|c| c.set(false));
     if hr < 0 || r.is_null() {
         static N: AtomicU64 = AtomicU64::new(0);
         if N.fetch_add(1, Ordering::Relaxed) < 8 {
             crate::xlog_warn!("D3D12.X: view at {va:#x}: the resource cannot be made ({hr:#x}); desc {x:02x?}");
         }
         r = std::ptr::null_mut();
-    }
-    if !r.is_null() && dred_on() {
-        name_resource(r, &format!("xcl resource_at va={va:#x}"));
     }
     MADE.lock().unwrap().get_or_insert_with(HashMap::new).insert((va, x), r as usize);
     r
@@ -6567,6 +6568,11 @@ pub fn drain_gpu() {
     }
 }
 
+thread_local! {
+    /// local diagnostic (integration-12gb, not for upstream): set while `resource_at` places a texture
+    pub(super) static VIEW_ORIGIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Whether DRED diagnostics were requested via `XCL_DRED=1`.
 pub(super) fn dred_on() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
@@ -6717,7 +6723,8 @@ pub fn log_device_removed() {
                     while !n.is_null() && v.len() < 8 {
                         let a = &*n;
                         let name = format_dred_allocation_name(a.ObjectNameW, a.ObjectNameA);
-                        let ptr = (&*a.pObject).as_ref().map(|obj| format!(" ptr={:#x}", obj.as_raw() as usize)).unwrap_or_default();
+                        // local diagnostic (integration-12gb, not for upstream): for a resource, where its tiles are
+                        let ptr = (&*a.pObject).as_ref().map(|obj| format!(" ptr={:#x}{}", obj.as_raw() as usize, if a.AllocationType.0 == 34 { super::vram::dred_describe(obj.as_raw() as usize) } else { String::new() })).unwrap_or_default();
                         v.push(format!("type {} {}{}", a.AllocationType.0, name, ptr));
                         n = a.pNext;
                     }

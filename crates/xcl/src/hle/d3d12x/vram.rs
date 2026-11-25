@@ -420,6 +420,11 @@ unsafe fn alloc_pool_heap(dev: &ID3D12Device, adapter: Option<&windows::Win32::G
         crate::xlog_warn!("D3D12.X: no video memory for more pages of title textures ({e})");
         return None;
     }
+    if properties.Type == D3D12_HEAP_TYPE_CUSTOM {
+        if let (Some(h), Ok(mut l0)) = (heap.as_ref(), L0_HEAPS.lock()) {
+            l0.push(h.as_raw() as usize);
+        }
+    }
     if super::real::dred_on() {
         if let Some(ref h) = heap {
             // local diagnostic (integration-12gb, not for upstream): which memory the pool is in
@@ -427,6 +432,30 @@ unsafe fn alloc_pool_heap(dev: &ID3D12Device, adapter: Option<&windows::Win32::G
         }
     }
     heap
+}
+
+/// local diagnostic (integration-12gb, not for upstream): pool heaps made in L0 system memory
+static L0_HEAPS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+
+/// local diagnostic (integration-12gb, not for upstream): what `Pages` knows of resource `res`,
+/// for the DRED report – its title address, whether it is mapped, and where its tiles are.
+pub(super) fn dred_describe(res: usize) -> String {
+    let Ok(g) = PAGES.try_lock() else { return " pages: locked".into() };
+    let l0 = L0_HEAPS.try_lock().map(|v| v.clone()).unwrap_or_default();
+    for p in g.values().flatten() {
+        let Some(t) = p.targets.get(&res) else { continue };
+        let (mut vram, mut sys, mut gone) = (0u32, 0u32, 0u32);
+        let tiles = t.used.iter().map(|k| p.pages.get(k).map(|x| x.tile)).chain(t.used_extra.iter().map(|k| p.extra_pages.get(k).map(|x| x.tile)));
+        for tile in tiles {
+            match tile.and_then(|(h, _)| p.pools.get(h as usize)) {
+                Some(heap) if l0.contains(&(heap.as_raw() as usize)) => sys += 1,
+                Some(_) => vram += 1,
+                None => gone += 1,
+            }
+        }
+        return format!(" pages: va={:#x} mapped={} tiles={} held: {vram} in video memory, {sys} in L0 system memory, {gone} missing", t.va, t.mapped, t.total);
+    }
+    " pages: not a target".into()
 }
 
 /// The title's pages of video memory for tiled textures (see the module's comment).
