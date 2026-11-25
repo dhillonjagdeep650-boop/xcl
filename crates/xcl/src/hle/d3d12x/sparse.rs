@@ -704,6 +704,9 @@ pub unsafe fn init(dev: &ID3D12Device) -> Vec<(usize, usize, u64)> {
             return Vec::new();
         }
         let Some(r) = r else { return Vec::new() };
+        if super::real::dred_on() {
+            super::real::name_resource(r.as_raw(), &format!("xcl sparse window {k}"));
+        }
         out.push((k, r.clone().into_raw() as usize, r.GetGPUVirtualAddress()));
         windows.push((base, r));
     }
@@ -1053,6 +1056,9 @@ impl State {
                 )
                 .ok()?;
             let r = r?;
+            if super::real::dred_on() {
+                super::real::name_resource(r.as_raw(), "xcl sparse staging");
+            }
             let mut p = std::ptr::null_mut();
             r.Map(0, None, Some(&mut p)).ok()?;
             self.staging = Some((r, p as *mut u8));
@@ -1080,6 +1086,9 @@ impl State {
                 return false;
             }
             let Some(r) = r else { return false };
+            if super::real::dred_on() {
+                super::real::name_resource(r.as_raw(), "xcl sparse zero");
+            }
             let mut p = std::ptr::null_mut();
             if r.Map(0, None, Some(&mut p)).is_err() {
                 return false;
@@ -1107,6 +1116,9 @@ impl State {
                 )
                 .ok()?;
             let r = r?;
+            if super::real::dred_on() {
+                super::real::name_resource(r.as_raw(), "xcl sparse readback");
+            }
             let mut p = std::ptr::null_mut();
             r.Map(0, None, Some(&mut p)).ok()?;
             self.readback = Some((r, p as *mut u8));
